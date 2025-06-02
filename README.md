@@ -176,23 +176,25 @@ See guidelines in [`RELEASING.md`](RELEASING.md) for details
 License
 -------
 
-Parity is © 2013-2021 thoughtbot, inc.
+Parity is © 2013 thoughtbot, inc.
 It is free software,
 and may be redistributed under the terms specified in the [LICENSE] file.
 
 [LICENSE]: LICENSE
 
-About thoughtbot
-----------------
+<!-- START /templates/footer.md -->
+## About thoughtbot
 
-![thoughtbot](http://presskit.thoughtbot.com/images/thoughtbot-logo-for-readmes.svg)
+![thoughtbot](https://thoughtbot.com/thoughtbot-logo-for-readmes.svg)
 
-Parity is maintained and funded by thoughtbot, inc.
+This repo is maintained and funded by thoughtbot, inc.
 The names and logos for thoughtbot are trademarks of thoughtbot, inc.
 
-We are passionate about open source software.
+We love open source software!
 See [our other projects][community].
 We are [available for hire][hire].
 
 [community]: https://thoughtbot.com/community?utm_source=github
-[hire]: https://thoughtbot.com?utm_source=github
+[hire]: https://thoughtbot.com/hire-us?utm_source=github
+
+<!-- END /templates/footer.md -->
