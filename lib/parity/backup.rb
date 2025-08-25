@@ -11,6 +11,7 @@ module Parity
       @from, @to = args.values_at(:from, :to)
       @additional_args = args[:additional_args] || BLANK_ARGUMENTS
       @parallelize = args[:parallelize] || false
+      @backup_id = args[:backup_id]
     end
 
     def restore
@@ -25,19 +26,33 @@ module Parity
 
     private
 
-    attr_reader :additional_args, :from, :to, :parallelize
+    attr_reader :additional_args, :from, :to, :parallelize, :backup_id
 
     alias :parallelize? :parallelize
 
+
+
+    def log_restore_info
+      if backup_id
+        puts "Restoring from #{from} backup ID: #{backup_id} to #{to}"
+      else
+        puts "Restoring from #{from} (latest backup) to #{to}"
+      end
+      puts "Starting backup restoration process..."
+    end
+
     def restore_from_development
+      log_restore_info
       reset_remote_database
       Kernel.system(
         "heroku pg:push #{development_db} DATABASE_URL --remote #{to} "\
           "#{additional_args}",
       )
+      puts "Backup restoration to #{to} completed successfully!"
     end
 
     def restore_to_development
+      log_restore_info
       ensure_temp_directory_exists
       download_remote_backup
       wipe_development_database
@@ -45,6 +60,7 @@ module Parity
       restore_from_local_temp_backup
       delete_local_temp_backup
       delete_rails_production_environment_settings
+      puts "Backup restoration to #{to} completed successfully!"
     end
 
     def wipe_development_database
@@ -77,21 +93,34 @@ module Parity
     end
 
     def download_remote_backup
-      Kernel.system(
-        "curl -o tmp/latest.backup \"$(heroku pg:backups:url --remote #{from})\"",
-      )
+      if backup_id
+        puts "Downloading backup #{backup_id} from #{from}..."
+        Kernel.system(
+          "curl -o tmp/#{backup_id}.backup \"$(heroku pg:backups:url #{backup_id} --remote #{from})\"",
+        )
+      else
+        puts "Downloading latest backup from #{from}..."
+        Kernel.system(
+          "curl -o tmp/latest.backup \"$(heroku pg:backups:url --remote #{from})\"",
+        )
+      end
     end
 
     def restore_from_local_temp_backup
+      puts "Restoring backup to #{development_db}..."
+      # Filter out --backup-id from additional_args as it's not needed for pg_restore
+      filtered_args = additional_args.gsub(/--backup-id\s+\S+/, '').strip
+      backup_filename = backup_id ? "#{backup_id}.backup" : "latest.backup"
       Kernel.system(
-        "pg_restore tmp/latest.backup --verbose --no-acl --no-owner "\
+        "pg_restore tmp/#{backup_filename} --verbose --no-acl --no-owner "\
           "--dbname #{development_db} --jobs=#{processor_cores} "\
-          "#{additional_args}",
+          "#{filtered_args}",
       )
     end
 
     def delete_local_temp_backup
-      Kernel.system("rm tmp/latest.backup")
+      backup_filename = backup_id ? "#{backup_id}.backup" : "latest.backup"
+      Kernel.system("rm tmp/#{backup_filename}")
     end
 
     def delete_rails_production_environment_settings
@@ -101,11 +130,15 @@ module Parity
     end
 
     def restore_to_remote_environment
+      log_restore_info
       reset_remote_database
+      # Filter out --backup-id from additional_args as it's handled separately
+      filtered_args = additional_args.gsub(/--backup-id\s+\S+/, '').strip
       Kernel.system(
         "heroku pg:backups:restore #{backup_from} --remote #{to} "\
-          "#{additional_args}",
+          "#{filtered_args}",
       )
+      puts "Backup restoration to #{to} completed successfully!"
     end
 
     def backup_from
@@ -113,7 +146,11 @@ module Parity
     end
 
     def remote_db_backup_url
-      "heroku pg:backups:url --remote #{from}"
+      if backup_id
+        "heroku pg:backups:url #{backup_id} --remote #{from}"
+      else
+        "heroku pg:backups:url --remote #{from}"
+      end
     end
 
     def development_db

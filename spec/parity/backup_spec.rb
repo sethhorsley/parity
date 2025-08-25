@@ -33,6 +33,37 @@ describe Parity::Backup do
         with(delete_local_temp_backup_command)
     end
 
+    it "restores from a specific backup ID when restoring to development" do
+      allow(IO).to receive(:read).and_return(database_fixture)
+      allow(Kernel).to receive(:system)
+      allow(Etc).to receive(:nprocessors).and_return(number_of_processes)
+
+      Parity::Backup.new(
+        from: "production",
+        to: "development",
+        backup_id: "b001",
+      ).restore
+
+      expect(Kernel).
+        to have_received(:system).
+        with(make_temp_directory_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(specific_backup_id_download_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(drop_development_database_drop_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(create_heroku_ext_schema_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(specific_backup_id_restore_from_local_temp_backup_command(cores: 1))
+      expect(Kernel).
+        to have_received(:system).
+        with(specific_backup_id_delete_local_temp_backup_command)
+    end
+
     it "restores backups to development with Rubies that do not support Etc.nprocessors" do
       allow(IO).to receive(:read).and_return(database_fixture)
       allow(Kernel).to receive(:system)
@@ -217,6 +248,20 @@ describe Parity::Backup do
       to have_received(:system).with(additional_argument_pass_through)
   end
 
+  it "restores from a specific backup ID when provided" do
+    stub_heroku_app_name
+    allow(Kernel).to receive(:system)
+
+    Parity::Backup.new(
+      from: "production",
+      to: "staging",
+      backup_id: "b001",
+    ).restore
+
+    expect(Kernel).
+      to have_received(:system).with(specific_backup_id_restore_command)
+  end
+
   def stub_heroku_app_name
     heroku_app_name =
       instance_double(Parity::HerokuAppName, to_s: "parity-staging")
@@ -239,7 +284,7 @@ describe Parity::Backup do
   end
 
   def drop_development_database_drop_command(db_name: default_db_name)
-    "dropdb --if-exists #{db_name} && createdb #{db_name}"
+    "dropdb --if-exists #{db_name} --force && createdb #{db_name}"
   end
 
   def create_heroku_ext_schema_command(db_name: default_db_name)
@@ -258,8 +303,17 @@ describe Parity::Backup do
     'curl -o tmp/latest.backup "$(heroku pg:backups:url --remote production)"'
   end
 
+  def specific_backup_id_download_command
+    'curl -o tmp/b001.backup "$(heroku pg:backups:url b001 --remote production)"'
+  end
+
   def restore_from_local_temp_backup_command(cores: number_of_processes)
     "pg_restore tmp/latest.backup --verbose --no-acl --no-owner "\
+      "--dbname #{default_db_name} --jobs=#{cores} "
+  end
+
+  def specific_backup_id_restore_from_local_temp_backup_command(cores: number_of_processes)
+    "pg_restore tmp/b001.backup --verbose --no-acl --no-owner "\
       "--dbname #{default_db_name} --jobs=#{cores} "
   end
 
@@ -269,6 +323,10 @@ describe Parity::Backup do
 
   def delete_local_temp_backup_command
     "rm tmp/latest.backup"
+  end
+
+  def specific_backup_id_delete_local_temp_backup_command
+    "rm tmp/b001.backup"
   end
 
   def heroku_development_to_staging_passthrough(db_name: default_db_name)
@@ -288,6 +346,11 @@ describe Parity::Backup do
     "heroku pg:backups:restore `heroku pg:backups:url "\
       "--remote production` DATABASE --remote staging "\
       "--confirm thisismyapp-staging"
+  end
+
+  def specific_backup_id_restore_command
+    "heroku pg:backups:restore `heroku pg:backups:url "\
+      "b001 --remote production` DATABASE --remote staging "
   end
 
   def default_db_name

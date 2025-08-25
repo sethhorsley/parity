@@ -67,12 +67,15 @@ module Parity
         $stdout.puts "Parity does not support restoring backups into your "\
           "production environment. Use `--force` to override."
       else
-        Backup.new(
+        backup_args = {
           from: arguments.first,
           to: environment,
           parallelize: parallelize?,
           additional_args: additional_restore_arguments,
-        ).restore
+        }
+        backup_args[:backup_id] = backup_id? if backup_id?
+        
+        Backup.new(backup_args).restore
       end
     end
 
@@ -90,9 +93,19 @@ module Parity
       arguments.include?("--parallelize")
     end
 
+    def backup_id?
+      backup_id_index = arguments.index { |arg| arg == "--backup-id" }
+      if backup_id_index && backup_id_index + 1 < arguments.length
+        arguments[backup_id_index + 1]
+      end
+    end
+
     def additional_restore_arguments
-      (arguments.drop(1) - ["--force", "--parallelize"] +
-        [restore_confirmation_argument]).compact.join(" ")
+      # Filter out special flags that are handled separately
+      filtered_args = arguments.drop(1) - ["--force", "--parallelize"]
+      # Filter out --backup-id as it's handled separately by the Backup class
+      filtered_args = filtered_args.reject { |arg| arg.start_with?("--backup-id") }
+      (filtered_args + [restore_confirmation_argument]).compact.join(" ")
     end
 
     def restore_confirmation_argument
