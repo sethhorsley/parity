@@ -28,9 +28,7 @@ module Parity
 
     attr_reader :additional_args, :from, :to, :parallelize, :backup_id
 
-    alias :parallelize? :parallelize
-
-
+    alias_method :parallelize?, :parallelize
 
     def log_restore_info
       if backup_id
@@ -45,8 +43,8 @@ module Parity
       log_restore_info
       reset_remote_database
       Kernel.system(
-        "heroku pg:push #{development_db} DATABASE_URL --remote #{to} "\
-          "#{additional_args}",
+        "heroku pg:push #{development_db} DATABASE_URL --remote #{to} " \
+          "#{additional_args}"
       )
       puts "Backup restoration to #{to} completed successfully!"
     end
@@ -65,7 +63,7 @@ module Parity
 
     def wipe_development_database
       Kernel.system(
-        "dropdb --if-exists #{development_db} --force && createdb #{development_db}",
+        "dropdb --if-exists #{development_db} --force && createdb #{development_db}"
       )
     end
 
@@ -79,8 +77,8 @@ module Parity
 
     def reset_remote_database
       Kernel.system(
-        "heroku pg:reset --remote #{to} #{additional_args} "\
-          "--confirm #{heroku_app_name}",
+        "heroku pg:reset --remote #{to} #{additional_args} " \
+          "--confirm #{heroku_app_name}"
       )
     end
 
@@ -96,12 +94,12 @@ module Parity
       if backup_id
         puts "Downloading backup #{backup_id} from #{from}..."
         Kernel.system(
-          "curl -o tmp/#{backup_id}.backup \"$(heroku pg:backups:url #{backup_id} --remote #{from})\"",
+          "curl -o tmp/#{backup_id}.backup \"$(heroku pg:backups:url #{backup_id} --remote #{from})\""
         )
       else
         puts "Downloading latest backup from #{from}..."
         Kernel.system(
-          "curl -o tmp/latest.backup \"$(heroku pg:backups:url --remote #{from})\"",
+          "curl -o tmp/latest.backup \"$(heroku pg:backups:url --remote #{from})\""
         )
       end
     end
@@ -109,12 +107,12 @@ module Parity
     def restore_from_local_temp_backup
       puts "Restoring backup to #{development_db}..."
       # Filter out --backup-id from additional_args as it's not needed for pg_restore
-      filtered_args = additional_args.gsub(/--backup-id\s+\S+/, '').strip
+      filtered_args = additional_args.gsub(/--backup-id\s+\S+/, "").strip
       backup_filename = backup_id ? "#{backup_id}.backup" : "latest.backup"
       Kernel.system(
-        "pg_restore tmp/#{backup_filename} --verbose --no-acl --no-owner "\
-          "--dbname #{development_db} --jobs=#{processor_cores} "\
-          "#{filtered_args}",
+        "pg_restore tmp/#{backup_filename} --verbose --no-acl --no-owner " \
+          "--dbname #{development_db} --jobs=#{processor_cores} " \
+          "#{filtered_args}"
       )
     end
 
@@ -133,10 +131,10 @@ module Parity
       log_restore_info
       reset_remote_database
       # Filter out --backup-id from additional_args as it's handled separately
-      filtered_args = additional_args.gsub(/--backup-id\s+\S+/, '').strip
+      filtered_args = additional_args.gsub(/--backup-id\s+\S+/, "").strip
       Kernel.system(
-        "heroku pg:backups:restore #{backup_from} --remote #{to} "\
-          "#{filtered_args}",
+        "heroku pg:backups:restore #{backup_from} --remote #{to} " \
+          "#{filtered_args}"
       )
       puts "Backup restoration to #{to} completed successfully!"
     end
@@ -154,12 +152,17 @@ module Parity
     end
 
     def development_db
-      YAML.safe_load(database_yaml_file, aliases: true).
-        fetch(DEVELOPMENT_ENVIRONMENT_KEY_NAME).
-        fetch(DATABASE_KEY_NAME)
+      YAML.safe_load(database_yaml_file, aliases: true)
+        .fetch(DEVELOPMENT_ENVIRONMENT_KEY_NAME)
+        .fetch(DATABASE_KEY_NAME)
     end
 
     def database_yaml_file
+      # Load Rails environment if Rails is not already loaded
+      # This is needed when database.yml uses Rails.application.credentials
+      unless defined?(Rails)
+        require File.expand_path("config/environment", Dir.pwd)
+      end
       ERB.new(IO.read(DATABASE_YML_RELATIVE_PATH)).result
     end
 
